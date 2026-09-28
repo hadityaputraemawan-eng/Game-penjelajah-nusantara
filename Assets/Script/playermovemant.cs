@@ -4,11 +4,11 @@ public class PlayerMovement : MonoBehaviour
 {
     [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float jumpPower = 10f;
+    [SerializeField] private float jumpPower = 12f;
 
-    [Header("Jump Settings")]
-    [SerializeField] private int maxJumps = 2; // Set 2 untuk Double Jump, Set 1 untuk Lompat Biasa
-    private int jumpsRemaining;
+    [Header("Ground Check Settings")]
+    [SerializeField] private Transform groundCheck;
+    [SerializeField] private float checkRadius = 0.2f;
 
     // Status karakter
     private float horizontalInput;
@@ -17,37 +17,42 @@ public class PlayerMovement : MonoBehaviour
 
     // Komponen
     private Rigidbody2D rb;
-    private Collider2D coll;
     private Animator animator;
 
     void Start()
     {
         rb = GetComponent<Rigidbody2D>();
-        coll = GetComponent<Collider2D>();
         animator = GetComponent<Animator>();
-        jumpsRemaining = maxJumps;
     }
 
     void Update()
     {
         horizontalInput = Input.GetAxis("Horizontal");
 
-        // Cek apakah menyentuh tanah
-        isGrounded = CheckGround();
-
-        // Reset jumlah lompatan saat menyentuh tanah
-        if (isGrounded && rb.linearVelocity.y <= 0.1f)
+        // Deteksi tanah sederhana: Cek apakah ada collider di sekitar objek groundCheck
+        if (groundCheck != null)
         {
-            jumpsRemaining = maxJumps;
+            // Ambil semua collider di sekitar titik groundCheck
+            Collider2D[] colliders = Physics2D.OverlapCircleAll(groundCheck.position, checkRadius);
+            
+            isGrounded = false;
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                // Jika menabrak objek lain yang BUKAN karakter Supri sendiri
+                if (colliders[i].gameObject != gameObject)
+                {
+                    isGrounded = true;
+                    break;
+                }
+            }
         }
 
         FlipSprite();
 
-        // Logika Melompat (Bisa loncat selama sisa lompatan masih ada)
-        if (Input.GetButtonDown("Jump") && jumpsRemaining > 0)
+        // LOGIKA LOMPAT
+        if (Input.GetKeyDown(KeyCode.Space) && isGrounded)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
-            jumpsRemaining--; // Kurangi jatah loncat
         }
 
         // Update animasi
@@ -68,19 +73,6 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
-    private bool CheckGround()
-    {
-        if (coll == null) return false;
-
-        // Tembakkan BoxCast sedikit lebih fleksibel di bawah kaki
-        Vector2 raycastOrigin = new Vector2(coll.bounds.center.x, coll.bounds.min.y);
-        Vector2 boxSize = new Vector2(coll.bounds.size.x * 0.8f, 0.05f);
-
-        RaycastHit2D hit = Physics2D.BoxCast(raycastOrigin, boxSize, 0f, Vector2.down, 0.15f);
-
-        return hit.collider != null && hit.collider.gameObject != gameObject;
-    }
-
     void FlipSprite()
     {
         if ((isFacingRight && horizontalInput < 0f) || (!isFacingRight && horizontalInput > 0f))
@@ -89,6 +81,16 @@ public class PlayerMovement : MonoBehaviour
             Vector3 ls = transform.localScale;
             ls.x *= -1f;
             transform.localScale = ls;
+        }
+    }
+
+    // Menggambar lingkarannya di tab Scene biar kelihatan jelas
+    private void OnDrawGizmos()
+    {
+        if (groundCheck != null)
+        {
+            Gizmos.color = isGrounded ? Color.green : Color.red;
+            Gizmos.DrawWireSphere(groundCheck.position, checkRadius);
         }
     }
 }
