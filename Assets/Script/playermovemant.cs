@@ -2,53 +2,65 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour
 {
-    // Variabel gerakan (diberi [SerializeField] agar bisa diatur lewat Inspector)
+    [Header("Movement Settings")]
     [SerializeField] private float moveSpeed = 5f;
-    [SerializeField] private float jumpPower = 5f;
+    [SerializeField] private float jumpPower = 10f;
+
+    [Header("Jump Settings")]
+    [SerializeField] private int maxJumps = 2; // Set 2 untuk Double Jump, Set 1 untuk Lompat Biasa
+    private int jumpsRemaining;
 
     // Status karakter
     private float horizontalInput;
-    private bool isFacingRight = true; // Ubah ke false jika sprite bawaanmu menghadap ke kiri
+    private bool isFacingRight = true;
     private bool isGrounded = false;
 
     // Komponen
     private Rigidbody2D rb;
+    private Collider2D coll;
     private Animator animator;
 
     void Start()
     {
-        // Mengambil komponen secara otomatis saat game mulai
         rb = GetComponent<Rigidbody2D>();
+        coll = GetComponent<Collider2D>();
         animator = GetComponent<Animator>();
+        jumpsRemaining = maxJumps;
     }
 
     void Update()
     {
-        // 1. Ambil input horizontal
         horizontalInput = Input.GetAxis("Horizontal");
 
-        // 2. Balik arah sprite berdasarkan input
+        // Cek apakah menyentuh tanah
+        isGrounded = CheckGround();
+
+        // Reset jumlah lompatan saat menyentuh tanah
+        if (isGrounded && rb.linearVelocity.y <= 0.1f)
+        {
+            jumpsRemaining = maxJumps;
+        }
+
         FlipSprite();
 
-        // 3. Logika Melompat
-        if (Input.GetButtonDown("Jump") && isGrounded)
+        // Logika Melompat (Bisa loncat selama sisa lompatan masih ada)
+        if (Input.GetButtonDown("Jump") && jumpsRemaining > 0)
         {
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpPower);
-            isGrounded = false;
+            jumpsRemaining--; // Kurangi jatah loncat
+        }
 
-            if (animator != null)
-            {
-                animator.SetBool("isJumping", !isGrounded);
-            }
+        // Update animasi
+        if (animator != null)
+        {
+            animator.SetBool("isJumping", !isGrounded);
         }
     }
 
     private void FixedUpdate()
     {
-        // Pergerakan karakter (menggunakan FixedUpdate untuk fisika)
         rb.linearVelocity = new Vector2(horizontalInput * moveSpeed, rb.linearVelocity.y);
 
-        // Update animasi kecepatan
         if (animator != null)
         {
             animator.SetFloat("xVelocity", Mathf.Abs(rb.linearVelocity.x));
@@ -56,29 +68,27 @@ public class PlayerMovement : MonoBehaviour
         }
     }
 
+    private bool CheckGround()
+    {
+        if (coll == null) return false;
+
+        // Tembakkan BoxCast sedikit lebih fleksibel di bawah kaki
+        Vector2 raycastOrigin = new Vector2(coll.bounds.center.x, coll.bounds.min.y);
+        Vector2 boxSize = new Vector2(coll.bounds.size.x * 0.8f, 0.05f);
+
+        RaycastHit2D hit = Physics2D.BoxCast(raycastOrigin, boxSize, 0f, Vector2.down, 0.15f);
+
+        return hit.collider != null && hit.collider.gameObject != gameObject;
+    }
+
     void FlipSprite()
     {
-        // Membalik skala X jika arah gerak bertolak belakang dengan arah hadap
         if ((isFacingRight && horizontalInput < 0f) || (!isFacingRight && horizontalInput > 0f))
         {
             isFacingRight = !isFacingRight;
             Vector3 ls = transform.localScale;
             ls.x *= -1f;
             transform.localScale = ls;
-        }
-    }
-
-    private void OnTriggerEnter2D(Collider2D collision)
-    {
-        // Deteksi pendaratan (opsional: tambahkan tag "Ground" di Unity)
-        if (collision.CompareTag("Ground"))
-        {
-            isGrounded = true;
-
-            if (animator != null)
-            {
-                animator.SetBool("isJumping", !isGrounded);
-            }
         }
     }
 }
